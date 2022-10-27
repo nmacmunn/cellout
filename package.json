@@ -1,0 +1,28 @@
+{
+  "name": "gbye",
+  "version": "1.0.0",
+  "description": "Checked exceptions for TypeScript",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p ./",
+    "test": "jest",
+    "watch": "tsc -p ./ --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nmacmunn/gbye.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/nmacmunn/gbye/issues"
+  },
+  "homepage": "https://github.com/nmacmunn/gbye#readme",
+  "devDependencies": {
+    "jest": "^29.2.2",
+    "prettier": "^2.7.1",
+    "ts-jest": "^29.0.3",
+    "typescript": "^4.8.4"
+  }
+}
