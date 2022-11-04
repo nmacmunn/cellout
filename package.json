@@ -1,11 +1,12 @@
 {
   "name": "gbye",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Checked exceptions for TypeScript",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p ./",
+    "prepublishOnly": "npm run test && npm run build",
     "test": "jest",
     "watch": "tsc -p ./ --watch"
   },

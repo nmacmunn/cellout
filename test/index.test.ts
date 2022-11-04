@@ -1,5 +1,5 @@
 import { describe, expect, test } from "@jest/globals";
-import { run } from "../src";
+import { run } from "../src/run";
 
 /**
  * Should check exit params
