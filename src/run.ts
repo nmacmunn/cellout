@@ -1,4 +1,4 @@
-import type { Controls, Exits, RunReturnType } from "./types";
+import type { Controls, Exits, RunReturnType, Spec } from "./types";
 
 /**
  * Container used to identify exceptions throw by us
@@ -29,7 +29,7 @@ class Carrier {
  * @returns
  */
 export function run<E extends Exits, Return>(
-  operation: (controls: Controls<E>) => Return,
+  operation: (controls: Controls<Spec<E>>) => Return,
   exits: E
 ): RunReturnType<E, Return> {
   // called when op throws or rejects
@@ -39,28 +39,27 @@ export function run<E extends Exits, Return>(
     }
     throw e;
   }
+  function exit(key: PropertyKey, ...args: unknown[]): never {
+    throw new Carrier(key, args);
+  }
+  function trap<P>(key: PropertyKey, ...args: [...unknown[], () => P]): P {
+    const exitArgs = args.slice(0, -1);
+    const [tryFn] = args.slice(-1) as [() => P];
+    function onCatch(e: unknown): never {
+      throw new Carrier(key, [...exitArgs, e]);
+    }
+    try {
+      const result = tryFn();
+      if (result instanceof Promise) {
+        return result.catch(onCatch) as P;
+      }
+      return result;
+    } catch (e) {
+      onCatch(e);
+    }
+  }
   try {
-    const result = operation({
-      exit: (key, ...args) => {
-        throw new Carrier(key, args);
-      },
-      trap: (key, ...args) => {
-        const cb = args.pop();
-        function onCatch(e: unknown): never {
-          args.push(e);
-          throw new Carrier(key, args);
-        }
-        try {
-          const result = (cb as () => any)();
-          if (result instanceof Promise) {
-            return result.catch(onCatch) as never;
-          }
-          return result;
-        } catch (e) {
-          onCatch(e);
-        }
-      },
-    });
+    const result = operation({ exit, trap });
     if (result instanceof Promise) {
       return result.catch(onCatch) as RunReturnType<E, Return>;
     } else {

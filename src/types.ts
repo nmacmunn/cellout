@@ -1,17 +1,28 @@
 type AnyFn = (...args: any) => any;
 
-export type Controls<E extends Exits> = { exit: Exit<E>; trap: Trap<E> };
+/**
+ * Type of the object that is passed to operation
+ */
+export type Controls<S extends Spec> = {
+  exit: Exit<S>;
+  trap: Trap<TrapSpec<S>>;
+};
 
 /**
  * Function that can only be invoked with the name of an exit and the
  * corresponding parameters.
  */
-interface Exit<E extends Exits> {
-  <K extends keyof E>(...args: [K, ...Parameters<E[K]>]): never;
-}
+type Exit<S extends Spec> = (...args: ExitArgs<S>) => never;
 
 /**
- * Functions defining typesafe exits for an operation
+ * Args required to call exit: exit key follow by user args
+ */
+type ExitArgs<S extends Spec> = {
+  [K in keyof S]: [K, ...S[K]];
+}[keyof S];
+
+/**
+ * User-defined functions that describe the exit points for an operation
  */
 export type Exits = Record<PropertyKey, AnyFn>;
 
@@ -21,6 +32,11 @@ export type Exits = Record<PropertyKey, AnyFn>;
 type ExitReturnTypes<E extends Exits> = {
   [K in keyof E]: ReturnType<E[K]>;
 }[keyof E];
+
+/**
+ * T without last element
+ */
+type Head<T> = T extends [...infer Head, infer Last] ? Head : never;
 
 /**
  * Return type of run is a union of the operation and exit return types and
@@ -36,55 +52,37 @@ export type RunReturnType<E extends Exits, Return> = [Return] extends [never]
     Return | ExitReturnTypes<E>;
 
 /**
- * Function that can only be invoked with the name of an exit, the corresponding
- * parameters, and a callback that could throw.
+ * Exit function name => parameters
  */
-interface Trap<E extends Exits> {
-  <K extends keyof TrapExits<E>, Return>(
-    ...args: [K, ...TrapParams<E[K]>, () => Return]
-  ): Return;
-}
-
-/**
- * Function that can trap i.e. last parameter is unknown
- */
-type TrapExit<Exit extends AnyFn> = Exit extends (
-  ...args: [...infer Params]
-) => any
-  ? UnknownLast<Params> extends true
-    ? Exit
-    : never
-  : never;
-
-/**
- * Subset of Exits that can trap
- */
-type TrapExits<E extends Exits> = {
-  [K in keyof E as E[K] extends TrapExit<E[K]> ? K : never]: E[K];
+export type Spec<E extends Exits = Exits> = {
+  [K in keyof E]: Parameters<E[K]>;
 };
 
 /**
- * Parameters required by trap for a particular exit
+ * Function that can only be invoked with the name of an exit, the corresponding
+ * parameters, and a callback that could throw.
  */
-type TrapParams<Exit extends AnyFn> = Exit extends (
-  ...args: [...infer Params, unknown]
-) => any
-  ? Params
-  : never;
+type Trap<S extends Spec> = <R>(...args: TrapArgs<S, R>) => R;
 
 /**
- * Utility type that is true if A is a tuple with the last element unknown
+ * Args required to call trap: exit key, user args, function that could throw
  */
-type UnknownLast<T> = T extends [infer First, ...infer Rest]
-  ? // A is array
-    Rest extends []
-    ? // Rest is empty
-      [unknown] extends T
-      ? // First is unknown
-        true
-      : // First not unknown
-        false
-    : // Rest not empty, call recursively
-      UnknownLast<Rest>
-  : // A not array
-    false;
+type TrapArgs<S extends Spec, R> = {
+  [K in keyof S]: [K, ...Head<S[K]>, () => R];
+}[keyof S];
+
+/**
+ * Subset of Specs that can trap
+ */
+type TrapSpec<S extends Spec> = {
+  [K in keyof S as S[K] extends UnknownLast<S[K]> ? K : never]: S[K];
+};
+
+/**
+ * Resolves to T if it's a tuple with last element unknown
+ */
+type UnknownLast<T> = T extends [...infer Head, infer Last]
+  ? unknown extends Last
+    ? T
+    : never
+  : never;

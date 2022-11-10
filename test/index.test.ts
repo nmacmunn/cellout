@@ -1,5 +1,6 @@
 import { describe, expect, test } from "@jest/globals";
 import { run } from "../src/run";
+import { Controls } from "../src/types";
 
 /**
  * Should check exit params
@@ -159,6 +160,23 @@ import { run } from "../src/run";
       fail: (error: unknown) => {},
     }
   );
+};
+
+/**
+ * operation defined externally
+ */
+() => {
+  const op = ({ exit }: Controls<{ a: [string] }>) => {
+    exit("a", "");
+    return;
+  };
+  // @ts-expect-error
+  run(op, {});
+  // @ts-expect-error
+  run(op, { a: (val: number) => val });
+  run(op, { a: (val: string) => val });
+  // @ts-expect-error
+  run(op, { a: (val: string, code: number) => val });
 };
 
 describe("gbye", () => {
