@@ -1,98 +1,79 @@
 type AnyFn = (...args: any) => any;
 
 /**
- * Utility type that is true if A is a tuple with the last element unknown
- */
-type UnknownLast<T> = T extends [infer First, ...infer Rest]
-  ? // A is array
-    Rest extends []
-    ? // Rest is empty
-      [unknown] extends T
-      ? // First is unknown
-        true
-      : // First not unknown
-        false
-    : // Rest not empty, call recursively
-      UnknownLast<Rest>
-  : // A not array
-    false;
-
-/**
  * Functions defining typesafe exits for an operation
  */
-type Exits = Record<PropertyKey, AnyFn>;
+type Channels = Record<PropertyKey, AnyFn>;
+
+type ChannelParams = Record<PropertyKey, unknown[]>;
+
+type ChannelsFromParams<C extends ChannelParams> = {
+  [K in keyof C]: (...args: C[K]) => any;
+};
 
 /**
  * Function that can only be invoked with the name of an exit and the
  * corresponding parameters.
  */
-interface Exit<E extends Exits> {
-  <K extends keyof E>(...args: [K, ...Parameters<E[K]>]): never;
-}
+type Exit<C extends Channels> = (
+  ...args: {
+    [K in keyof C]: [K, ...Parameters<C[K]>];
+  }[keyof C]
+) => never;
 
 /**
- * Function that can trap i.e. last parameter is unknown
+ * If the type of the last item is unknown, return the tuple type without that
+ * item.
  */
-type TrapExit<Exit extends AnyFn> = Exit extends (
-  ...args: [...infer Params]
-) => any
-  ? UnknownLast<Params> extends true
-    ? Exit
-    : never
-  : never;
-
-/**
- * Subset of Exits that can trap
- */
-type TrapExits<E extends Exits> = {
-  [K in keyof E as E[K] extends TrapExit<E[K]> ? K : never]: E[K];
-};
-
-/**
- * Parameters required by trap for a particular exit
- */
-type TrapParams<Exit extends AnyFn> = Exit extends (
-  ...args: [...infer Params, unknown]
-) => any
-  ? Params
-  : never;
+type NoUnknownLast<T> = T extends [...head: infer Head, last?: infer Last]
+  ? [unknown] extends [Last]
+    ? [] extends Head
+      ? []
+      : Head
+    : [...Head, Last]
+  : [];
 
 /**
  * Function that can only be invoked with the name of an exit, the corresponding
  * parameters, and a callback that could throw.
  */
-interface Trap<E extends Exits> {
-  <K extends keyof TrapExits<E>, Return>(
-    ...args: [K, ...TrapParams<E[K]>, () => Return]
-  ): Return;
-}
+type Trap<C extends Channels> = <Return>(
+  ...args: {
+    [K in keyof C]: [K, ...NoUnknownLast<Parameters<C[K]>>, () => Return];
+  }[keyof C]
+) => Return;
 
 /**
- * Container used to identify exceptions throw by us
+ * Union of exit return types
+ */
+type ReturnTypes<C extends Channels> = {
+  [K in keyof C]: ReturnType<C[K]>;
+}[keyof C];
+
+/**
+ * Return type of run is a union of the operation and channel return types and
+ * is async if operation is.
+ */
+type RunReturnType<C extends Channels, Return> = [Return] extends [never]
+  ? // only the exit return types
+    ReturnTypes<C>
+  : Return extends Promise<unknown>
+  ? // async union of operation and exit return types
+    Promise<Awaited<Return> | Awaited<ReturnTypes<C>>>
+  : // union of operation and exit return types
+    Return | ReturnTypes<C>;
+
+/**
+ * Container used to identify internal exceptions
  */
 class Carrier {
   constructor(public key: PropertyKey, public args: unknown[]) {}
 }
 
-/**
- * Union of exit return types
- */
-type ExitReturnTypes<E extends Exits> = {
-  [K in keyof E]: ReturnType<E[K]>;
-}[keyof E];
-
-/**
- * Return type of run is a union of the operation and exit return types and
- * is async if operation is.
- */
-type RunReturnType<E extends Exits, Return> = [Return] extends [never]
-  ? // only the exit return types
-    ExitReturnTypes<E>
-  : Return extends Promise<unknown>
-  ? // async union of operation and exit return types
-    Promise<Awaited<Return> | Awaited<ExitReturnTypes<E>>>
-  : // union of operation and exit return types
-    Return | ExitReturnTypes<E>;
+export interface Gbye<C extends ChannelParams> {
+  exit: Exit<ChannelsFromParams<C>>;
+  trap: Trap<ChannelsFromParams<C>>;
+}
 
 /**
  * Run a function with controls for throwing errors in a typesafe manner.
@@ -106,36 +87,38 @@ type RunReturnType<E extends Exits, Return> = [Return] extends [never]
  * trap is invoked with an exit function name, parameters (except the last one
  * which must be unknown), and a function to try
  *
- * @param exits
+ * @param channels
  * An object containing functions that handle different exit conditions.
  * Specified function parameters become required arguments for exit and trap.
- * If the final parameter of an exit has type unknown, the exit is eligible
+ * If the final parameter of a channel has type unknown, the channel is eligible
  * to use with trap. In that case, the final argument will be the value thrown
  * by the trapped function.
  *
  * @returns
  */
-export function run<E extends Exits, Return>(
-  operation: (commands: { exit: Exit<E>; trap: Trap<E> }) => Return,
-  exits: E
-): RunReturnType<E, Return> {
+export function run<C extends Channels, Return>(
+  operation: (gbye: { exit: Exit<C>; trap: Trap<C> }) => Return,
+  channels: C
+): RunReturnType<C, Return> {
   // called when op throws or rejects
   function onCatch(e: unknown) {
     if (e instanceof Carrier) {
-      return exits[e.key](...e.args);
+      return channels[e.key](...e.args);
     }
     throw e;
   }
   try {
     const result = operation({
-      exit: (key, ...args) => {
+      exit: <K extends keyof C>(key: K, ...args: Parameters<C[K]>) => {
         throw new Carrier(key, args);
       },
-      trap: (key, ...args) => {
+      trap: <K extends keyof C>(
+        key: K,
+        ...args: [...NoUnknownLast<Parameters<C[K]>>, () => any]
+      ) => {
         const cb = args.pop();
         function onCatch(e: unknown): never {
-          args.push(e);
-          throw new Carrier(key, args);
+          throw new Carrier(key, [...args, e]);
         }
         try {
           const result = (cb as AnyFn)();
@@ -149,9 +132,9 @@ export function run<E extends Exits, Return>(
       },
     });
     if (result instanceof Promise) {
-      return result.catch(onCatch) as RunReturnType<E, Return>;
+      return result.catch(onCatch) as RunReturnType<C, Return>;
     } else {
-      return result as RunReturnType<E, Return>;
+      return result as RunReturnType<C, Return>;
     }
   } catch (e) {
     return onCatch(e);

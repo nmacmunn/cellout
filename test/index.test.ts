@@ -1,5 +1,5 @@
 import { describe, expect, test } from "@jest/globals";
-import { run } from "../src";
+import { Gbye, run } from "../src";
 
 /**
  * Should check exit params
@@ -16,6 +16,20 @@ import { run } from "../src";
 };
 
 /**
+ * Optional exit param
+ */
+() => {
+  const result: void = run(
+    ({ exit }) => {
+      exit("fail", "something went wrong", new Error());
+    },
+    {
+      fail: (reason: string, error?: unknown) => {},
+    }
+  );
+};
+
+/**
  * Should check trap params
  */
 () => {
@@ -25,6 +39,20 @@ import { run } from "../src";
     },
     {
       fail: (error: unknown) => {},
+    }
+  );
+};
+
+/**
+ * Optional trap param
+ */
+() => {
+  const result: void = run(
+    ({ trap }) => {
+      trap("fail", () => JSON.parse(""));
+    },
+    {
+      fail: (error?: unknown) => {},
     }
   );
 };
@@ -157,6 +185,121 @@ import { run } from "../src";
     },
     {
       fail: (error: unknown) => {},
+    }
+  );
+};
+
+/**
+ * Trap return type
+ */
+() => {
+  run(
+    ({ trap }) => {
+      let result: string;
+      // @ts-expect-error
+      result = trap("fail", () => parseInt(""));
+    },
+    {
+      fail: (error: unknown) => {},
+    }
+  );
+};
+
+/**
+ * Gbye assignability
+ */
+() => {
+  function foo(gbye: Gbye<{ fail: [] }>) {
+    gbye.exit("fail");
+  }
+  run(
+    (gbye) => {
+      // @ts-expect-error
+      foo(gbye);
+    },
+    {
+      error: () => {},
+    }
+  );
+};
+
+() => {
+  function foo(gbye: Gbye<{ fail: [] }>) {
+    gbye.exit("fail");
+  }
+  run(
+    (gbye) => {
+      foo(gbye);
+    },
+    {
+      error: () => {},
+      fail: () => {},
+    }
+  );
+};
+
+/**
+ * exit assignability
+ */
+() => {
+  function foo(exit: Gbye<{ fail: [] }>["exit"]) {
+    exit("fail");
+  }
+  run(
+    (gbye) => {
+      // @ts-expect-error
+      foo(gbye.exit);
+    },
+    {
+      error: () => {},
+    }
+  );
+};
+
+() => {
+  function foo(exit: Gbye<{ fail: [] }>["exit"]) {
+    exit("fail");
+  }
+  run(
+    (gbye) => {
+      foo(gbye.exit);
+    },
+    {
+      error: () => {},
+      fail: () => {},
+    }
+  );
+};
+
+/**
+ * trap assignability
+ */
+() => {
+  function foo(trap: Gbye<{ fail: [] }>["trap"]) {
+    trap("fail", () => {});
+  }
+  run(
+    (gbye) => {
+      // @ts-expect-error
+      foo(gbye.trap);
+    },
+    {
+      error: () => {},
+    }
+  );
+};
+
+() => {
+  function foo(trap: Gbye<{ fail: [] }>["trap"]) {
+    trap("fail", () => {});
+  }
+  run(
+    (gbye) => {
+      foo(gbye.trap);
+    },
+    {
+      error: () => {},
+      fail: () => {},
     }
   );
 };

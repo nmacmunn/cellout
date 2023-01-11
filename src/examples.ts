@@ -2,6 +2,7 @@
 // 2. want to know what has been thrown, otherwise it's like every fn returning unknown
 // 3. send should require a specific type
 // 4. trap should
+// 5. convenient unreachable code
 
 import { run } from ".";
 
@@ -45,6 +46,8 @@ function parsePerson2(text: string): Person | Error {
   return json;
 }
 
+try {
+} catch (e) {}
 /**
  * Now if we try to use the function, the type checker will force us to
  * check the return value. We can no longer ignore the failure outcome.
@@ -97,5 +100,3 @@ function parsePerson3(text: string): Person | Error {
 
 // problem: propagating errors is annoying
 //
-
-
