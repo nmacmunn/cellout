@@ -1,12 +1,9 @@
-type AnyFn = (...args: any) => any;
+export type AnyFn = (...args: any) => any;
 
 /**
- * Type of the object that is passed to operation
+ * User-defined functions that represent safe exit points for an operation
  */
-export type Controls<S extends Spec> = {
-  exit: Exit<S>;
-  trap: Trap<TrapSpec<S>>;
-};
+export type Channels = Record<PropertyKey, AnyFn>;
 
 /**
  * Function that can only be invoked with the name of an exit and the
@@ -22,40 +19,38 @@ type ExitArgs<S extends Spec> = {
 }[keyof S];
 
 /**
- * User-defined functions that describe the exit points for an operation
+ * First argument passed to operation
  */
-export type Exits = Record<PropertyKey, AnyFn>;
+export interface Gbye<S extends Spec> {
+  exit: Exit<S>;
+  trap: Trap<S>;
+}
 
 /**
- * Union of exit return types
+ * Union of channel return types
  */
-type ExitReturnTypes<E extends Exits> = {
-  [K in keyof E]: ReturnType<E[K]>;
-}[keyof E];
+type ChannelReturnTypes<C extends Channels> = {
+  [K in keyof C]: ReturnType<C[K]>;
+}[keyof C];
 
 /**
- * T without last element
- */
-type Head<T> = T extends [...infer Head, infer Last] ? Head : never;
-
-/**
- * Return type of run is a union of the operation and exit return types and
+ * Return type of run is a union of the operation and channel return types and
  * is async if operation is.
  */
-export type RunReturnType<E extends Exits, Return> = [Return] extends [never]
+export type RunReturnType<C extends Channels, Return> = [Return] extends [never]
   ? // only the exit return types
-    ExitReturnTypes<E>
+    ChannelReturnTypes<C>
   : Return extends Promise<unknown>
   ? // async union of operation and exit return types
-    Promise<Awaited<Return> | Awaited<ExitReturnTypes<E>>>
+    Promise<Awaited<Return> | Awaited<ChannelReturnTypes<C>>>
   : // union of operation and exit return types
-    Return | ExitReturnTypes<E>;
+    Return | ChannelReturnTypes<C>;
 
 /**
  * Exit function name => parameters
  */
-export type Spec<E extends Exits = Exits> = {
-  [K in keyof E]: Parameters<E[K]>;
+export type Spec<C extends Channels = Channels> = {
+  [K in keyof C]: Parameters<C[K]>;
 };
 
 /**
@@ -68,21 +63,16 @@ type Trap<S extends Spec> = <R>(...args: TrapArgs<S, R>) => R;
  * Args required to call trap: exit key, user args, function that could throw
  */
 type TrapArgs<S extends Spec, R> = {
-  [K in keyof S]: [K, ...Head<S[K]>, () => R];
+  [K in keyof S]: [K, ...NoUnknownLast<S[K]>, () => R];
 }[keyof S];
 
 /**
- * Subset of Specs that can trap
+ * Remove the final element from a tuple type if it's unknown
  */
-type TrapSpec<S extends Spec> = {
-  [K in keyof S as S[K] extends UnknownLast<S[K]> ? K : never]: S[K];
-};
-
-/**
- * Resolves to T if it's a tuple with last element unknown
- */
-type UnknownLast<T> = T extends [...infer Head, infer Last]
-  ? unknown extends Last
-    ? T
-    : never
-  : never;
+type NoUnknownLast<T> = T extends [...head: infer H, last?: infer L]
+  ? unknown extends L
+    ? [] extends H
+      ? []
+      : H
+    : T
+  : [];

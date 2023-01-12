@@ -1,2 +1,2 @@
 export { run } from "./run";
-export type { Controls } from "./types";
+export type { Gbye } from "./types";

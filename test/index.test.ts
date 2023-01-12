@@ -1,6 +1,6 @@
 import { describe, expect, test } from "@jest/globals";
 import { run } from "../src/run";
-import { Controls } from "../src/types";
+import { Gbye } from "../src/types";
 
 /**
  * Should check exit params
@@ -9,9 +9,26 @@ import { Controls } from "../src/types";
   const result: void = run(
     ({ exit }) => {
       exit("fail", "something went wrong");
+      // @ts-expect-error
+      exit("fail");
     },
     {
       fail: (reason: string) => {},
+    }
+  );
+};
+
+/**
+ * Optional exit param
+ */
+() => {
+  const result: void = run(
+    ({ exit }) => {
+      exit("fail", "something went wrong");
+      exit("fail", "something went wrong", new Error());
+    },
+    {
+      fail: (reason: string, error?: unknown) => {},
     }
   );
 };
@@ -23,9 +40,29 @@ import { Controls } from "../src/types";
   const result: void = run(
     ({ trap }) => {
       trap("fail", () => JSON.parse(""));
+      trap("ignore", () => JSON.parse(""));
+      // @ts-expect-error
+      trap("fail", new Error());
     },
     {
       fail: (error: unknown) => {},
+      ignore: () => {},
+    }
+  );
+};
+
+/**
+ * Optional trap param
+ */
+() => {
+  const result: void = run(
+    ({ trap }) => {
+      trap("fail", () => JSON.parse(""));
+      // @ts-expect-error
+      trap("fail", new Error());
+    },
+    {
+      fail: (error?: unknown) => {},
     }
   );
 };
@@ -162,14 +199,28 @@ import { Controls } from "../src/types";
   );
 };
 
-/**
- * operation defined externally
+/*
+ * Trap return type
  */
 () => {
-  const op = ({ exit }: Controls<{ a: [string] }>) => {
-    exit("a", "");
-    return;
-  };
+  run(
+    ({ trap }) => {
+      let result: string;
+      result = trap("fail", () => "");
+      // @ts-expect-error
+      result = trap("fail", () => parseInt(""));
+    },
+    {
+      fail: (error: unknown) => {},
+    }
+  );
+};
+
+/**
+ * Assignability
+ */
+() => {
+  const op = (gbye: Gbye<{ a: [string] }>) => {};
   // @ts-expect-error
   run(op, {});
   // @ts-expect-error
@@ -177,6 +228,93 @@ import { Controls } from "../src/types";
   run(op, { a: (val: string) => val });
   // @ts-expect-error
   run(op, { a: (val: string, code: number) => val });
+  // @ts-expect-error
+  run(op, { a: (val: string, error: unknown) => val });
+  run(op, { a: (val: string, error?: unknown) => val });
+
+  function a(gbye: Gbye<{ a: [] }>) {}
+  function b(gbye: Gbye<{ b: [unknown] }>) {}
+  function ab(gbye: Gbye<{ a: []; b: [unknown] }>) {}
+
+  function empty() {}
+  function maybeUnknown(val?: unknown) {}
+  function unknown(val: unknown) {}
+
+  run(a, { a: empty });
+  run(a, { a: maybeUnknown });
+  // @ts-expect-error
+  run(a, { a: unknown });
+  // @ts-expect-error
+  run(a, { b: empty });
+  // @ts-expect-error
+  run(a, { b: maybeUnknown });
+  // @ts-expect-error
+  run(a, { b: unknown });
+  run(a, { a: empty, b: empty });
+  run(a, { a: maybeUnknown, b: empty });
+  // @ts-expect-error
+  run(a, { a: unknown, b: empty });
+  run(a, { a: empty, b: maybeUnknown });
+  run(a, { a: maybeUnknown, b: maybeUnknown });
+  // @ts-expect-error
+  run(a, { a: unknown, b: maybeUnknown });
+  run(a, { a: empty, b: unknown });
+  run(a, { a: maybeUnknown, b: unknown });
+  // @ts-expect-error
+  run(a, { a: unknown, b: unknown });
+
+  // @ts-expect-error
+  run(b, { a: empty });
+  // @ts-expect-error
+  run(b, { a: maybeUnknown });
+  // @ts-expect-error
+  run(b, { a: unknown });
+  /**
+   * @todo why does this pass but not:
+   * run(b, { a: empty, b: empty })
+   */
+  run(b, { b: empty });
+  run(b, { b: maybeUnknown });
+  run(b, { b: unknown });
+  // @ts-expect-error
+  run(b, { a: empty, b: empty });
+  // @ts-expect-error
+  run(b, { a: maybeUnknown, b: empty });
+  // @ts-expect-error
+  run(b, { a: unknown, b: empty });
+  run(b, { a: empty, b: maybeUnknown });
+  run(b, { a: maybeUnknown, b: maybeUnknown });
+  run(b, { a: unknown, b: maybeUnknown });
+  run(b, { a: empty, b: unknown });
+  run(b, { a: maybeUnknown, b: unknown });
+  run(b, { a: unknown, b: unknown });
+
+  // @ts-expect-error
+  run(ab, { a: empty });
+  // @ts-expect-error
+  run(ab, { a: maybeUnknown });
+  // @ts-expect-error
+  run(ab, { a: unknown });
+  // @ts-expect-error
+  run(ab, { b: empty });
+  // @ts-expect-error
+  run(ab, { b: maybeUnknown });
+  // @ts-expect-error
+  run(ab, { b: unknown });
+  // @ts-expect-error
+  run(ab, { a: empty, b: empty });
+  // @ts-expect-error
+  run(ab, { a: maybeUnknown, b: empty });
+  // @ts-expect-error
+  run(ab, { a: unknown, b: empty });
+  run(ab, { a: empty, b: maybeUnknown });
+  run(ab, { a: maybeUnknown, b: maybeUnknown });
+  // @ts-expect-error
+  run(ab, { a: unknown, b: maybeUnknown });
+  run(ab, { a: empty, b: unknown });
+  run(ab, { a: maybeUnknown, b: unknown });
+  // @ts-expect-error
+  run(ab, { a: unknown, b: unknown });
 };
 
 describe("gbye", () => {

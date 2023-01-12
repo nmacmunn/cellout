@@ -1,4 +1,4 @@
-import type { Controls, Exits, RunReturnType, Spec } from "./types";
+import type { Channels, Gbye, RunReturnType, Spec } from "./types";
 
 /**
  * Container used to identify exceptions throw by us
@@ -19,39 +19,39 @@ class Carrier {
  * trap is invoked with an exit function name, parameters (except the last one
  * which must be unknown), and a function to try
  *
- * @param exits
+ * @param channels
  * An object containing functions that handle different exit conditions.
  * Specified function parameters become required arguments for exit and trap.
- * If the final parameter of an exit has type unknown, the exit is eligible
+ * If the final parameter of a channel has type unknown, the channel is eligible
  * to use with trap. In that case, the final argument will be the value thrown
  * by the trapped function.
  *
  * @returns
  */
-export function run<E extends Exits, Return>(
-  operation: (controls: Controls<Spec<E>>) => Return,
-  exits: E
-): RunReturnType<E, Return> {
+export function run<C extends Channels, Return>(
+  operation: (gbye: Gbye<Spec<C>>) => Return,
+  channels: C
+): RunReturnType<C, Return> {
   // called when op throws or rejects
   function onCatch(e: unknown) {
     if (e instanceof Carrier) {
-      return exits[e.key](...e.args);
+      return channels[e.key](...e.args);
     }
     throw e;
   }
   function exit(key: PropertyKey, ...args: unknown[]): never {
     throw new Carrier(key, args);
   }
-  function trap<P>(key: PropertyKey, ...args: [...unknown[], () => P]): P {
+  function trap<R>(key: PropertyKey, ...args: [...unknown[], () => R]): R {
     const exitArgs = args.slice(0, -1);
-    const [tryFn] = args.slice(-1) as [() => P];
+    const [tryFn] = args.slice(-1) as [() => R];
     function onCatch(e: unknown): never {
       throw new Carrier(key, [...exitArgs, e]);
     }
     try {
       const result = tryFn();
       if (result instanceof Promise) {
-        return result.catch(onCatch) as P;
+        return result.catch(onCatch) as R;
       }
       return result;
     } catch (e) {
@@ -61,11 +61,11 @@ export function run<E extends Exits, Return>(
   try {
     const result = operation({ exit, trap });
     if (result instanceof Promise) {
-      return result.catch(onCatch) as RunReturnType<E, Return>;
+      return result.catch(onCatch) as RunReturnType<C, Return>;
     } else {
-      return result as RunReturnType<E, Return>;
+      return result as RunReturnType<C, Return>;
     }
   } catch (e) {
-    return onCatch(e) as RunReturnType<E, Return>;
+    return onCatch(e);
   }
 }
