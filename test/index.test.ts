@@ -1,425 +1,312 @@
 import { describe, expect, test } from "@jest/globals";
-import { run } from "../src/run";
-import { Gbye } from "../src/types";
+import { run, trap, type Gbye } from "../src/index";
+
+//
+// TYPES
+//
 
 /**
- * Should check exit params
- */
-() => {
-  const result: void = run(
-    ({ exit }) => {
-      exit("fail", "something went wrong");
-      // @ts-expect-error
-      exit("fail");
-    },
-    {
-      fail: (reason: string) => {},
-    }
-  );
-};
-
-/**
- * Optional exit param
- */
-() => {
-  const result: void = run(
-    ({ exit }) => {
-      exit("fail", "something went wrong");
-      exit("fail", "something went wrong", new Error());
-    },
-    {
-      fail: (reason: string, error?: unknown) => {},
-    }
-  );
-};
-
-/**
- * Should check trap params
- */
-() => {
-  const result: void = run(
-    ({ trap }) => {
-      trap("fail", () => JSON.parse(""));
-      trap("ignore", () => JSON.parse(""));
-      // @ts-expect-error
-      trap("fail", new Error());
-    },
-    {
-      fail: (error: unknown) => {},
-      ignore: () => {},
-    }
-  );
-};
-
-/**
- * Optional trap param
- */
-() => {
-  const result: void = run(
-    ({ trap }) => {
-      trap("fail", () => JSON.parse(""));
-      // @ts-expect-error
-      trap("fail", new Error());
-    },
-    {
-      fail: (error?: unknown) => {},
-    }
-  );
-};
-
-/**
- * Return type should be union of operation return type and exit return
- * types
- */
-() => {
-  const result: string | boolean = run(() => "", {
-    fail: (reason: string) => false,
-  });
-};
-
-/**
- * Return type should be union of exit return types
- */
-() => {
-  const result: boolean = run(
-    ({ exit }) => {
-      throw exit("fail", "something went wrong");
-    },
-    {
-      fail: (reason: string) => false,
-    }
-  );
-};
-
-/**
- * Return type should be a promise if operation is async
- */
-() => {
-  const result: Promise<boolean> = run(
-    async ({ exit }) => {
-      throw exit("fail", "something went wrong");
-    },
-    {
-      fail: (reason: string) => false,
-    }
-  );
-};
-
-/**
- * Return type of trap should be return type of callback
+ * run
  */
 () => {
   run(
-    ({ trap }) => {
-      const result: number = trap("fail", () => parseInt(""));
-    },
-    {
-      fail: (error: unknown) => {},
-    }
+    (gbye) => gbye("error"),
+    (reason: string, err?: unknown) => {}
   );
+  run(
+    (gbye) => gbye("error", new Error()),
+    (reason: string, err?: unknown) => {}
+  );
+  run(
+    // @ts-expect-error: wrong arg type
+    (gbye) => gbye(0),
+    (reason: string, err?: unknown) => {}
+  );
+  // @ts-expect-error: missing handler
+  run((gbye) => gbye("error"));
+  run(
+    // @ts-expect-error: missing arg
+    (gbye) => gbye(),
+    (reason: string, err?: unknown) => {}
+  );
+  run(
+    (gbye) => true,
+    // @ts-expect-error: invalid handler arg type
+    (err: unknown) => {}
+  );
+  const result: string | boolean = run(
+    (gbye) => true,
+    (reason: string) => reason
+  );
+  // @ts-expect-error: wrong return type
+  const wrongResult: boolean = run(
+    (gbye) => true,
+    (reason: string) => reason
+  );
+  const resultP: Promise<string | boolean> = run(
+    async (gbye) => true,
+    (reason: string) => reason
+  );
+  const resultP2: Promise<string | boolean> = run(
+    async (gbye) => true,
+    async (reason: string) => reason
+  );
+  const resultP3: boolean | Promise<string> = run(
+    (gbye) => true,
+    async (reason: string) => reason
+  );
+  // @ts-expect-error: wrong return type
+  const wrongResultP: Promise<boolean> = run(
+    async (gbye) => true,
+    (reason: string) => reason
+  );
+
+  //
+  // Assignability
+  //
+
+  function emptyHandler() {}
+  function emptyHandlerE(err?: unknown) {}
+  function maybeUnknownHandler(val?: unknown) {}
+  function maybeUnknownHandlerE(val?: unknown, err?: unknown) {}
+  function unknownHandler(val: unknown) {}
+  function unknownHandlerE(val: unknown, err?: unknown) {}
+  function strHandler(val: string) {}
+  function strHandlerE(val: string, err?: unknown) {}
+  function numHandler(val: number) {}
+  function numHandlerE(val: number, err?: unknown) {}
+  function strOrNumHandler(val: string | number) {}
+  function strOrNumHandlerE(val: string | number, err?: unknown) {}
+
+  function noOp() {}
+
+  // @ts-expect-error
+  run(noOp, emptyHandler);
+  // @ts-expect-error
+  run(noOp, emptyHandlerE);
+  // @ts-expect-error
+  run(noOp, maybeUnknownHandler);
+  // @ts-expect-error
+  run(noOp, maybeUnknownHandlerE);
+  // @ts-expect-error
+  run(noOp, unknownHandler);
+  // @ts-expect-error
+  run(noOp, unknownHandlerE);
+  run(noOp, strHandler);
+  run(noOp, strHandlerE);
+  run(noOp, numHandler);
+  run(noOp, numHandlerE);
+  run(noOp, strOrNumHandler);
+  run(noOp, strOrNumHandlerE);
+
+  function strOp(gbye: Gbye<string>) {
+    throw gbye("", new Error());
+  }
+
+  // @ts-expect-error
+  run(strOp, emptyHandler);
+  // @ts-expect-error
+  run(strOp, emptyHandlerE);
+  // @ts-expect-error
+  run(strOp, maybeUnknownHandler);
+  // @ts-expect-error
+  run(strOp, maybeUnknownHandlerE);
+  // @ts-expect-error
+  run(strOp, unknownHandler);
+  // @ts-expect-error
+  run(strOp, unknownHandlerE);
+  run(strOp, strHandler);
+  run(strOp, strHandlerE);
+  // @ts-expect-error
+  run(strOp, numHandler);
+  // @ts-expect-error
+  run(strOp, numHandlerE);
+  run(strOp, strOrNumHandler);
+  run(strOp, strOrNumHandlerE);
+
+  function numOp(gbye: Gbye<number>) {
+    throw gbye(0, new Error());
+  }
+
+  // @ts-expect-error
+  run(numOp, emptyHandler);
+  // @ts-expect-error
+  run(numOp, emptyHandlerE);
+  // @ts-expect-error
+  run(numOp, maybeUnknownHandler);
+  // @ts-expect-error
+  run(numOp, maybeUnknownHandlerE);
+  // @ts-expect-error
+  run(numOp, unknownHandler);
+  // @ts-expect-error
+  run(numOp, unknownHandlerE);
+  // @ts-expect-error
+  run(numOp, strHandler);
+  // @ts-expect-error
+  run(numOp, strHandlerE);
+  run(numOp, numHandler);
+  run(numOp, numHandlerE);
+  run(numOp, strOrNumHandler);
+  run(numOp, strOrNumHandlerE);
+
+  function strOrNumOp(gbye: Gbye<string | number>) {
+    throw gbye(0, new Error());
+  }
+
+  // @ts-expect-error
+  run(strOrNumOp, emptyHandler);
+  // @ts-expect-error
+  run(strOrNumOp, emptyHandlerE);
+  // @ts-expect-error
+  run(strOrNumOp, maybeUnknownHandler);
+  // @ts-expect-error
+  run(strOrNumOp, maybeUnknownHandlerE);
+  // @ts-expect-error
+  run(strOrNumOp, unknownHandler);
+  // @ts-expect-error
+  run(strOrNumOp, unknownHandlerE);
+  // @ts-expect-error
+  run(strOrNumOp, strHandler);
+  // @ts-expect-error
+  run(strOrNumOp, strHandlerE);
+  // @ts-expect-error
+  run(strOrNumOp, numHandler);
+  // @ts-expect-error
+  run(strOrNumOp, numHandlerE);
+  run(strOrNumOp, strOrNumHandler);
+  run(strOrNumOp, strOrNumHandlerE);
 };
 
 /**
- * Missing exit
- */
-() => {
-  run(({ exit }) => {
-    // @ts-expect-error
-    exit("fail");
-  }, {});
-};
-
-/**
- * Missing exit argument
+ * trap
  */
 () => {
   run(
-    ({ exit }) => {
-      // @ts-expect-error
-      exit("fail");
+    (gbye) => {
+      const result: number = trap(gbye, () => parseInt(""), "parse fail");
+      // @ts-expect-error: missing argument
+      trap(gbye, () => parseInt(""));
+      // @ts-expect-error: wrong argument type
+      trap(gbye, () => parseInt(""), 1);
+      // @ts-expect-error: wrong return type
+      const wrong: string = trap(gbye, () => parseInt(""), "parse fail");
     },
-    {
-      fail: (reason: string) => {},
-    }
+    (reason: string, error?: unknown) => {}
   );
 };
 
-/**
- * Wrong exit argument type
- */
-() => {
-  run(
-    ({ exit }) => {
-      // @ts-expect-error
-      exit("fail", 0);
-    },
-    {
-      fail: (reason: string) => {},
-    }
-  );
-};
-
-/**
- * Missing trap function
- */
-() => {
-  run(({ trap }) => {
-    // @ts-expect-error
-    trap("fail", "broken", () => JSON.parse(""));
-  }, {});
-};
-
-/**
- * Invalid trap function
- */
-() => {
-  run(
-    ({ trap }) => {
-      // @ts-expect-error
-      trap("fail", "broken", () => JSON.parse(""));
-    },
-    {
-      fail: () => {},
-    }
-  );
-};
-
-/**
- * Wrong trap argument type
- */
-() => {
-  run(
-    ({ trap }) => {
-      // @ts-expect-error
-      trap("fail", "broken", () => JSON.parse(""));
-    },
-    {
-      fail: (error: unknown) => {},
-    }
-  );
-};
-
-/*
- * Trap return type
- */
-() => {
-  run(
-    ({ trap }) => {
-      let result: string;
-      result = trap("fail", () => "");
-      // @ts-expect-error
-      result = trap("fail", () => parseInt(""));
-    },
-    {
-      fail: (error: unknown) => {},
-    }
-  );
-};
-
-/**
- * Assignability
- */
-() => {
-  const op = (gbye: Gbye<{ a: [string] }>) => {};
-  // @ts-expect-error
-  run(op, {});
-  // @ts-expect-error
-  run(op, { a: (val: number) => val });
-  run(op, { a: (val: string) => val });
-  // @ts-expect-error
-  run(op, { a: (val: string, code: number) => val });
-  // @ts-expect-error
-  run(op, { a: (val: string, error: unknown) => val });
-  run(op, { a: (val: string, error?: unknown) => val });
-
-  function a(gbye: Gbye<{ a: [] }>) {}
-  function b(gbye: Gbye<{ b: [unknown] }>) {}
-  function ab(gbye: Gbye<{ a: []; b: [unknown] }>) {}
-
-  function empty() {}
-  function maybeUnknown(val?: unknown) {}
-  function unknown(val: unknown) {}
-
-  run(a, { a: empty });
-  run(a, { a: maybeUnknown });
-  // @ts-expect-error
-  run(a, { a: unknown });
-  // @ts-expect-error
-  run(a, { b: empty });
-  // @ts-expect-error
-  run(a, { b: maybeUnknown });
-  // @ts-expect-error
-  run(a, { b: unknown });
-  run(a, { a: empty, b: empty });
-  run(a, { a: maybeUnknown, b: empty });
-  // @ts-expect-error
-  run(a, { a: unknown, b: empty });
-  run(a, { a: empty, b: maybeUnknown });
-  run(a, { a: maybeUnknown, b: maybeUnknown });
-  // @ts-expect-error
-  run(a, { a: unknown, b: maybeUnknown });
-  run(a, { a: empty, b: unknown });
-  run(a, { a: maybeUnknown, b: unknown });
-  // @ts-expect-error
-  run(a, { a: unknown, b: unknown });
-
-  // @ts-expect-error
-  run(b, { a: empty });
-  // @ts-expect-error
-  run(b, { a: maybeUnknown });
-  // @ts-expect-error
-  run(b, { a: unknown });
-  /**
-   * @todo why does this pass but not:
-   * run(b, { a: empty, b: empty })
-   */
-  run(b, { b: empty });
-  run(b, { b: maybeUnknown });
-  run(b, { b: unknown });
-  // @ts-expect-error
-  run(b, { a: empty, b: empty });
-  // @ts-expect-error
-  run(b, { a: maybeUnknown, b: empty });
-  // @ts-expect-error
-  run(b, { a: unknown, b: empty });
-  run(b, { a: empty, b: maybeUnknown });
-  run(b, { a: maybeUnknown, b: maybeUnknown });
-  run(b, { a: unknown, b: maybeUnknown });
-  run(b, { a: empty, b: unknown });
-  run(b, { a: maybeUnknown, b: unknown });
-  run(b, { a: unknown, b: unknown });
-
-  // @ts-expect-error
-  run(ab, { a: empty });
-  // @ts-expect-error
-  run(ab, { a: maybeUnknown });
-  // @ts-expect-error
-  run(ab, { a: unknown });
-  // @ts-expect-error
-  run(ab, { b: empty });
-  // @ts-expect-error
-  run(ab, { b: maybeUnknown });
-  // @ts-expect-error
-  run(ab, { b: unknown });
-  // @ts-expect-error
-  run(ab, { a: empty, b: empty });
-  // @ts-expect-error
-  run(ab, { a: maybeUnknown, b: empty });
-  // @ts-expect-error
-  run(ab, { a: unknown, b: empty });
-  run(ab, { a: empty, b: maybeUnknown });
-  run(ab, { a: maybeUnknown, b: maybeUnknown });
-  // @ts-expect-error
-  run(ab, { a: unknown, b: maybeUnknown });
-  run(ab, { a: empty, b: unknown });
-  run(ab, { a: maybeUnknown, b: unknown });
-  // @ts-expect-error
-  run(ab, { a: unknown, b: unknown });
-};
+//
+// RUNTIME
+//
 
 describe("gbye", () => {
   test("should return a result", () => {
-    const result = run(() => true, {});
+    const result = run(
+      () => true,
+      (reason: string) => {}
+    );
     expect(result).toBe(true);
   });
   test("should return an async result", async () => {
-    const result = await run(async () => true, {});
+    const result = await run(
+      async () => true,
+      (reason: string) => {}
+    );
     expect(result).toBe(true);
   });
   test("should not catch unknown errors", () => {
     const e = new Error();
     expect(() =>
-      run(() => {
-        throw e;
-      }, {})
+      run(
+        () => {
+          throw e;
+        },
+        (reason: string) => {}
+      )
     ).toThrow(e);
   });
   test("should not catch unknown rejections", async () => {
     expect.assertions(1);
     const e = new Error();
     try {
-      await run(async () => {
-        throw e;
-      }, {});
+      await run(
+        async () => {
+          throw e;
+        },
+        (reason: string) => {}
+      );
     } catch (caught) {
       expect(caught).toBe(e);
     }
   });
   describe("exit", () => {
-    test("should return by a specific exit", () => {
+    test("should return the handler result", () => {
       const result = run(
-        ({ exit }) => {
-          exit("fail");
+        (gbye) => {
+          gbye("fail");
           return true;
         },
-        {
-          fail: () => false,
-        }
+        (reason: string) => false
       );
       expect(result).toBe(false);
     });
     test("should return asynchronously by a specific exit", async () => {
       const result = await run(
-        async ({ exit }) => {
-          exit("fail");
+        async (gbye) => {
+          gbye("fail");
           return true;
         },
-        {
-          fail: () => false,
-        }
+        (reason: string) => false
       );
       expect(result).toBe(false);
     });
-    test("should pass arguments to the specified exit", () => {
+    test("should pass val to the handler", () => {
+      const e = new Error();
       const result = run(
-        ({ exit }) => {
-          exit("fail", "foo", "bar");
+        (gbye) => {
+          gbye("fail", e);
           return true;
         },
-        {
-          fail: (foo: string, bar: string) => [foo, bar],
-        }
+        (reason: string, error: unknown) => [reason, error]
       );
-      expect(result).toEqual(["foo", "bar"]);
+      expect(result).toEqual(["fail", e]);
     });
   });
   describe("trap", () => {
     test("should return result if function doesn't throw", () => {
       const result = run(
-        ({ trap }) => {
-          return trap("fail", () => true);
+        (gbye) => {
+          return trap(gbye, () => true, "fail");
         },
-        {
-          fail: (error: unknown) => false,
-        }
+        (reason: string) => false
       );
       expect(result).toBe(true);
     });
     test("should return async result if function doesn't throw", async () => {
       const result = await run(
-        ({ trap }) => {
-          return trap("fail", async () => true);
+        (gbye) => {
+          return trap(gbye, async () => true, "fail");
         },
-        {
-          fail: (error: unknown) => false,
-        }
+        (reason: string) => false
       );
       expect(result).toBe(true);
     });
     test("should pass arguments to the specified exit", () => {
       const e = new Error();
       const result = run(
-        ({ trap }) => {
-          trap("fail", "foo", "bar", () => {
-            throw e;
-          });
+        (gbye) => {
+          trap(
+            gbye,
+            () => {
+              throw e;
+            },
+            "fail"
+          );
           return true;
         },
-        {
-          fail: (foo: string, bar: string, error: unknown) => [foo, bar, error],
-        }
+        (reason: string, error: unknown) => [reason, error]
       );
-      expect(result).toEqual(["foo", "bar", e]);
+      expect(result).toEqual(["fail", e]);
     });
   });
 });

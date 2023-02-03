@@ -10,7 +10,7 @@ npm install --save gbye
 
 ### Overview
 
-The main function `run` receives an `operation`, wraps it in a `try-catch`, and passes it an object with two methods: `exit` and `trap`. The second argument to `run` is a `channels` object defining type-safe exit points for `operation`. When `exit` is called with the name and arguments of a channel, it throws an exception that immediately terminates `operation` and invokes the channel function. `run` returns the result of `operation` or one of the `channels`. Any exception throw without `exit` or `trap` will not be caught by `run`.
+The main function `run` receives an `operation`, wraps it in a `try-catch`, and passes it a `gbye` function. The second argument to `run` is a `handler` handles typesafe exceptions for `operation`. Invoking `gbye` with the parameter type expected by `handler`, immediately terminates `operation` and invokes `handler`. `run` returns the result of `operation` on success, or else the result of `handler`. Exceptions throw without a `gbye` are considered impolite and not be caught by `run`.
 
 ### Usage
 
@@ -25,13 +25,9 @@ Pass an `operation` and `channels` to `run`. The operation is passed a `Gbye` ob
 ```typescript
 run(
   // operation
-  (gbye) => {
-    gbye.exit("done");
-  },
-  // channels
-  {
-    done: () => console.log("Done"),
-  }
+  (gbye) => gbye("done"),
+  // handler
+  (reason: string) = > console.log("Done")
 );
 // logs: "Done"
 ```
@@ -43,14 +39,12 @@ run(
   // operation
   (gbye) => {
     if (!confirm("Do something?")) {
-      gbye.exit("abort");
+      gbye("Aborted");
     }
     console.log("Completed");
   },
-  // channels
-  {
-    abort: () => console.log(`Aborted`),
-  }
+  // handler
+  (reason: string) => console.error(reason)
 );
 // logs: "Aborted" or "Completed"
 ```
@@ -63,13 +57,16 @@ run(
   (gbye) => {
     const password = prompt("Enter your password") || "";
     if (password !== "pa$$word") {
-      gbye.exit("wrong", password);
+      gbye({
+        reason: "Wrong password",
+        data: password,
+      });
     }
     console.log("Logged in");
   },
-  // channels
-  {
-    wrong: (password: string) => console.log(`Wrong password: ${password}`),
+  // handler
+  (err: { reason: string; data: string }) => {
+    console.error(`${err.reason}: ${e.data}`);
   }
 );
 // logs: "Logged in" or "Wrong password: ..."
@@ -78,38 +75,49 @@ run(
 Trap exceptions thrown by other functions.
 
 ```typescript
+import { run, trap } from "gbye";
+
 run(
+  // operation
   (gbye) => {
     const json = prompt("Enter JSON string") || "";
-    const obj = gbye.trap("error", "Parse Error:", () => JSON.parse(json));
+    const obj = trap(gbye, () => JSON.parse(json), "Parse Error");
     console.log("Object:", obj);
   },
-  {
-    error: (msg: string, error?: unknown) => console.error(msg, error),
-  }
+  // handler
+  (reason: string, error?: unknown) => console.error(`${Reason}:`, error)
 );
 // logs: "Object: ..." or "Parse Error: SyntaxError: ..."
 ```
 
-Define nested operations that use a subset of `channels`.
+Define nested operations.
 
 ```typescript
-import { run, Gbye } from "gbye";
+import { run, trap, Gbye } from "gbye";
+
+type ParseFail = {
+  type: "parse";
+};
+
+type ValidationFail = {
+  type: "validation";
+  detail: string;
+};
 
 /**
  * Could terminate via "parse" channel
  */
-function getJSON(gbye: Gbye<{ parse: [] }>) {
+function getJSON(gbye: Gbye<ParseFail>) {
   const json = prompt("Enter JSON string") || "";
-  return gbye.trap("parse", () => JSON.parse(json));
+  return trap(gbye, () => JSON.parse(json), { type: "parse" });
 }
 
 /**
  * Could terminate via "invalid" channel
  */
-function validate(gbye: Gbye<{ invalid: [string] }>, json: unknown) {
+function validate(gbye: Gbye<ValidationFail>, json: unknown) {
   if (typeof json !== "object") {
-    gbye.exit("invalid", "not an object");
+    gbye({ type: "validation", detail: "not an object" });
   }
 }
 
@@ -117,13 +125,16 @@ run(
   // operation
   (gbye) => {
     const json = getJSON(gbye);
-    validate(json, gbye);
+    validate(gbye, json);
     console.log("Object:", json);
   },
-  // channels
-  {
-    parse: (error?: unknown) => console.error("Parse Error:", error),
-    invalid: (reason: string) => console.error("Invalid JSON:", reason),
+  // handler
+  (val: ValidationFail | ParseFail, error?: unknown) => {
+    if (val.type === "parse") {
+      console.error("Parse Error:", error);
+    } else if (val.type === "validation") {
+      console.error("Invalid JSON:", val.detail);
+    }
   }
 );
 // logs: "Object: ..." or "Parse Error: SyntaxError: ..." or "Invalid JSON: not an object"
