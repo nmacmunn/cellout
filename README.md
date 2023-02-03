@@ -25,9 +25,9 @@ Pass an `operation` and `channels` to `run`. The operation is passed a `Gbye` ob
 ```typescript
 run(
   // operation
-  (gbye) => gbye("done"),
+  (gbye) => gbye("Done"),
   // handler
-  (reason: string) = > console.log("Done")
+  (reason: string) = > console.log(reason)
 );
 // logs: "Done"
 ```
